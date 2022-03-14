@@ -1,8 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
 import { Footer } from './standard';
 import { Home } from './pages';
+import { Setup } from './setup';
 
 import './index.scss';
 
@@ -13,6 +15,7 @@ ReactDOM.render(
         <div style={{ flex: 1 }}>
           <Routes>
             <Route path='/' element={<Home />} />
+            <Route path='/setup' element={<Setup />} />
           </Routes>
         </div>
         <Footer />
