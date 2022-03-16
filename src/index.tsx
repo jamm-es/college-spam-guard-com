@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
-import { Footer } from './standard';
+import { Header, Footer } from './standard';
 import { Home } from './pages';
 import { Setup } from './setup';
 
@@ -12,6 +12,10 @@ ReactDOM.render(
   <React.StrictMode>
     <BrowserRouter>
       <div className='d-flex flex-column min-vh-100'>
+        <Routes>
+          <Route path='/' />
+          <Route path='*' element={<Header />} />
+        </Routes>
         <div style={{ flex: 1 }}>
           <Routes>
             <Route path='/' element={<Home />} />
