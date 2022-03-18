@@ -16,7 +16,7 @@ ReactDOM.render(
           <Route path='/' />
           <Route path='*' element={<Header />} />
         </Routes>
-        <div style={{ flex: 1 }}>
+        <div className='position-relative' style={{ flex: 1 }}>
           <Routes>
             <Route path='/' element={<Home />} />
             <Route path='/setup' element={<Setup />} />

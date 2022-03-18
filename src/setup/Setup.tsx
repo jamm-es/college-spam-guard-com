@@ -43,6 +43,37 @@ function Setup(props: {}) {
     });
   }, []);
 
+  useEffect(() => {
+    if(step === 3) {
+
+      // pass 1 - get edus and exceptions to search ONLY for known spam sources (including fully qualified, etc)
+      gapi.client.gmail.users.messages.list({ 
+        userId: 'me',
+        maxResults: 500,
+        //includeSpamTrash: true,
+        q: 'after: 1970/01/01 from:*@*.edu' // or exceptions from server check list
+      })
+        .then(res => {
+          if(typeof res.result.messages !== 'undefined') {
+            for(const message of res.result.messages) {
+              gapi.client.gmail.users.messages.get({
+                userId: 'me',
+                id: message.id!,
+                format: 'metadata'
+              })
+                .then(res => {
+                  console.log(res.result);
+                })
+            }
+          }
+        });
+
+      // pass 2 - get edus or other sus college-y emails, including conditions for if it's a spam source
+
+    }
+  }, [step])
+  
+
   return <main>
     <div className='bg-secondary text-dark'>
       <Container fluid='sm' className='bg-secondary text-dark py-2' style={{ fontSize: '1.25rem' }}>
@@ -141,6 +172,13 @@ function Setup(props: {}) {
       </Container>
       : <Container fluid='sm'>
         <h2 className='py-5'>Choose colleges to whitelist</h2>
+      </Container>
+    }
+    {
+      step !== 1 && <Container fluid='sm' style={{ height: '5rem' }}>
+        <Button className='position-absolute' variant='outline-dark' style={{ bottom: '1rem' }} onClick={() => setStep(step-1)}>
+          Go back
+        </Button>
       </Container>
     }
   </main>
