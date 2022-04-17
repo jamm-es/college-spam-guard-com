@@ -5,6 +5,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Header, Footer } from './standard';
 import { Home } from './pages';
 import { Setup } from './setup';
+import { Manage } from './manage';
+import { SignIn } from './signin';
 
 import './index.scss';
 
@@ -19,7 +21,9 @@ ReactDOM.render(
         <div className='position-relative' style={{ flex: 1 }}>
           <Routes>
             <Route path='/' element={<Home />} />
+            <Route path='/signin' element={<SignIn />}/>
             <Route path='/setup' element={<Setup />} />
+            <Route path='/manage' element={<Manage />} />
           </Routes>
         </div>
         <Footer />

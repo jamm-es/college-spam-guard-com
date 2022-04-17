@@ -5,7 +5,7 @@ function Home(props: {}) {
   return <main className='bg-primary text-light text-center'>
     <Container fluid='sm' className='py-5'>
       <h1 className='mb-4'>Instantly block all college spam</h1>
-      <Link to='/setup'>
+      <Link to='/signin'>
         <Button variant='outline-light' size='lg'>
           Get started
         </Button>

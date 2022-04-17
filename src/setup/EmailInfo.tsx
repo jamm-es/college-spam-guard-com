@@ -4,14 +4,17 @@ import { Card, Col } from "react-bootstrap";
 
 import Email from './Email';
 
-function EmailInfo(props: { email: Email, variant: 'whitelist' | 'block', onIconClick: () => void }) {
+function EmailInfo(props: { email: Email, variant: 'whitelist' | 'block', onIconClick?: () => void, button?: boolean }) {
   return <Col>
     <Card body className='w-100'>
       <div className='d-flex justify-content-between'>
         <h5>{props.email.school ?? props.email.name}</h5>
-        <div onClick={props.onIconClick} style={{ cursor: 'pointer', fontSize: '1.5rem' }} className={`ms-3 d-flex flex-column ${props.variant === 'whitelist' ? 'text-primary' : 'text-danger'}`}>
+        {
+          (props.button === undefined || props.button) && <div onClick={props.onIconClick} style={{ cursor: 'pointer', fontSize: '1.5rem' }} className={`ms-3 d-flex flex-column ${props.variant === 'whitelist' ? 'text-primary' : 'text-danger'}`}>
           <FontAwesomeIcon icon={props.variant === 'whitelist' ? faClipboardCheck : faBan}/>
         </div>
+        }
+        
       </div>
       <p>
         {
