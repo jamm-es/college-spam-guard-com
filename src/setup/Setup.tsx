@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, CardGroup, Col, Container, Form, Modal, Row } from "react-bootstrap";
+import { Button, Card, CardGroup, Col, Container, Form, Modal, Row } from "react-bootstrap";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { faGoogle } from '@fortawesome/free-brands-svg-icons';
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 import LoadingText from "./LoadingText";
 import Email from './Email';
+import EmailGroup from './EmailGroup';
 import credentials from '../credentials.json';
 import api from '../api.json';
 import EmailInfo from "./EmailInfo";
@@ -24,11 +24,9 @@ function Setup(props: {}) {
   const [filterMethod, setFilterMethod] = useState<'read' | 'archive' | 'trash' | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [extraMessage, setExtraMessage] = useState<string>('');
-  const [whitelistedEmails, setWhitelistedEmails] = useState<Email[]>([]);
-  const [blockedEmails, setBlockedEmails] = useState<Email[]>([]);
-  const [blockedEmailsSearch, setBlockedEmailsSearch] = useState<string>('');
-  const [potentialEmails, setPotentialEmails] = useState<Email[]>([]);
-  const [potentialEmailsSearch, setPotentialEmailsSearch] = useState<string>('');
+  const [whitelistedEmailGroups, setWhitelistedEmailGroups] = useState<EmailGroup[]>([]);
+  const [blockedEmailGroups, setBlockedEmailGroups] = useState<EmailGroup[]>([]);
+  const [blockedEmailGroupsSearch, setBlockedEmailGroupsSearch] = useState<string>('');
   const [showFilterConfirmation, setShowFilterConfirmation] = useState<boolean>(false);
   const [numMessagesModified, setNumMessagesModified] = useState<number>(0);
 
@@ -73,170 +71,150 @@ function Setup(props: {}) {
   useEffect(() => {
     if(step === 2 && !isLoading) {
       setIsLoading(true);
-      Promise.all([
-        axios.get(new URL('blocked-emails', api.url).href),
-        axios.get(new URL('college-urls', api.url).href)
-      ])
-        .then(([{ data: blockedEmails }, { data: collegeURLs }]) => {
 
-          type BlockedEmail = {
-            emailAddress: string,
-            isEdu: boolean,
-            school: string,
-            name: string,
-          };
-
+      // get list of colleges with urls and names from CSG server
+      axios.get(new URL('college-urls', api.url).href)
+        .then(({ data: collegeURLs }) => {
           type CollegeURL = {
             url: string,
             isEdu: boolean,
             name: string
           };
 
-          const listBatch = gapi.client.newBatch();
-          const collegeURLSearchTerm = `from:{*@*.edu ${blockedEmails.filter((d: BlockedEmail) => !d.isEdu).map((d: BlockedEmail) => d.emailAddress).join(' ')}}`;
-          // knownPass - get edus and exceptions to search ONLY for known spam sources (including fully qualified, etc)
-          listBatch.add(gapi.client.gmail.users.messages.list({
-            userId: 'me',
-            maxResults: 500,
-            includeSpamTrash: true,
-            q: `after: 1970/01/01 ${collegeURLSearchTerm}` // or exceptions from server check list
-          }), { id: 'knownPass', callback: () => {} });
+          // creates search term for all edu domains, plus any non-edu's from our college list
+          const collegeURLSearchTerm = `from:{*@*.edu ${collegeURLs.filter((d: CollegeURL) => !d.isEdu).map((d: CollegeURL) => `*@${d.url}`).join(' ')}}`;
 
-          // potentialPass - search for likely spammers
-          listBatch.add(gapi.client.gmail.users.messages.list({ 
+          // search for likely spammers
+          gapi.client.gmail.users.messages.list({
             userId: 'me',
             maxResults: 500,
             includeSpamTrash: true,
             q: 'after: 1970/01/01'
               + '(unsubscribe OR subscribe OR subscription OR (update AROUND 5 preferences) OR (change AROUND 5 preferences) OR (email AROUND 5 preferences) OR (update AROUND 5 email))'
               + `(from:{college university admission admissions school} OR ${collegeURLSearchTerm})` // or exceptions from server check list
-          }), { id: 'potentialPass', callback: () => {} });
-          
-          listBatch.then(async ({ result: { knownPass: { result: knownPass }, potentialPass: { result: potentialPass }} }) => {
-            const allIDs = new Set<string>();
-            knownPass.messages.forEach((d: MinimalMessage) => allIDs.add(d.id));
-            potentialPass.messages.forEach((d: MinimalMessage) => allIDs.add(d.id));
+          })
+            .then(async ({ result: { messages: minimalMessages } }) => {
 
-            let messageCount = 0;
-            const messageBatches = [];
-            const numMessagesAtEachBatch = [];
-            for(const id of allIDs) {
-              if(messageCount % 50 === 0) {
-                numMessagesAtEachBatch.push(messageCount);
-                messageBatches.push(gapi.client.newBatch());
+              // batch search result message id's into 50s to get message details
+              let messageCount = 0;
+              const messageBatches = [];
+              const numMessagesAtEachBatch = [];
+              for(const messageID of minimalMessages?.map(d => d.id!)!) {
+                if(messageCount % 50 === 0) {
+                  numMessagesAtEachBatch.push(messageCount);
+                  messageBatches.push(gapi.client.newBatch());
+                }
+
+                messageBatches[messageBatches.length-1].add(gapi.client.gmail.users.messages.get({
+                  userId: 'me',
+                  id: messageID,
+                  format: 'metadata',
+                  metadataHeaders: ['From', 'Subject']
+                }), { id: messageID, callback: () => {} });
+
+                ++messageCount;
               }
 
-              messageBatches[messageBatches.length-1].add(gapi.client.gmail.users.messages.get({
-                userId: 'me',
-                id: id,
-                format: 'metadata',
-                metadataHeaders: ['From', 'Subject']
-              }), { id: id, callback: () => {} });
-
-              ++messageCount;
-            }
-
-            const messageBatchResults = [];
-            let messageBatchIndex = 0;
-            for(const messageBatch of messageBatches) {
-              setExtraMessage(`Loading emails (${numMessagesAtEachBatch[messageBatchIndex]}/${messageCount})`);
-              messageBatchResults.push(await messageBatch); // run batch
-              if(messageBatchIndex !== messageBatches.length-1) await new Promise(resolve => setTimeout(resolve, 1000)); // wait 1 second for rate limiting
-              ++messageBatchIndex;
-            }
-            setExtraMessage('');
-
-            const messages: { [key: string] : any } = {};
-            for(const messageBatch of messageBatchResults) {
-              for(const [key, value] of Object.entries(messageBatch.result)) {
-                messages[key] = value.result;
+              // run message batches one by one to prevent rate limit
+              const messageBatchResults = [];
+              let messageBatchIndex = 0;
+              for(const messageBatch of messageBatches) {
+                setExtraMessage(`Loading emails (${numMessagesAtEachBatch[messageBatchIndex]}/${messageCount})`);
+                messageBatchResults.push(await messageBatch); // run batch
+                if(messageBatchIndex !== messageBatches.length-1) await new Promise(resolve => setTimeout(resolve, 1000)); // wait 1 second for rate limiting
+                ++messageBatchIndex;
               }
-            }
+              setExtraMessage(''); // clears extra message
 
-            type Header = { name: string, value: string };
-
-            const convertEmail = (fromHeader: string): Email => {
-              if(/<.+>/.test(fromHeader)) {
-                const emailAddressPart = fromHeader.match(/<.+>/)![0];
-                return {
-                  emailAddress: emailAddressPart.substring(1, emailAddressPart.length-1).toLowerCase(),
-                  name: fromHeader.split('<')[0].trim().match(/"?(?<name>[^"]+)"?/)!.groups!.name.trim(),
-                  message: {}
+              // consolidate into single array of full messages
+              const messageResults: gapi.client.gmail.Message[] = [];
+              for(const messageBatch of messageBatchResults) {
+                for(const result of Object.values(messageBatch.result)) {
+                  messageResults.push(result.result as gapi.client.gmail.Message);
                 }
               }
-              else {
-                return {
-                  emailAddress: fromHeader.toLowerCase(),
-                  name: '',
-                  message: {}
+
+              // helper function that converts email address into full Email object
+              const convertEmail = (fromHeader: string): Email => {
+                if(/<.+>/.test(fromHeader)) {
+                  const emailAddressPart = fromHeader.match(/<.+>/)![0];
+                  return {
+                    emailAddress: emailAddressPart.substring(1, emailAddressPart.length-1).toLowerCase(),
+                    name: fromHeader.split('<')[0].trim().match(/"?(?<name>[^"]+)"?/)!.groups!.name.trim(),
+                    messages: [],
+                    searchString: ''
+                  }
+                }
+                else {
+                  return {
+                    emailAddress: fromHeader.toLowerCase(),
+                    name: '',
+                    messages: [],
+                    searchString: ''
+                  }
                 }
               }
-            }
 
-            const knownMessages = knownPass.messages.map((d: MinimalMessage) => messages[d.id]);
-            const knownEmails = knownMessages.map((message: any) => {
-              const email: Email = convertEmail(message.payload.headers.find((d: Header) => d.name === 'From').value);
-              email.message = message;
-              return email;
-            });
-            const knownEmailsSeenSoFar = new Set();
-            const uniqueKnownEmails = [];
-            for(const knownEmail of knownEmails) {
-              if(knownEmailsSeenSoFar.has(knownEmail.emailAddress)) continue;
-              uniqueKnownEmails.push(knownEmail);
-              knownEmailsSeenSoFar.add(knownEmail.emailAddress);
-            }
-            const filteredKnownEmails = uniqueKnownEmails.filter((email: Email) => {
-              const result = blockedEmails.find((blockedEmail: BlockedEmail) => blockedEmail.emailAddress === email.emailAddress);
-              if(typeof result !== 'undefined') {
-                email.school = result.school;
-                email.name = result.name;
-                return true;
+              // convert messages to Email objects with associated message
+              const ununiqueEmails: Email[] = messageResults.map(messageResult => {
+                const email: Email = convertEmail(messageResult.payload?.headers?.find(d => d.name === 'From')?.value!);
+                email.messages.push(messageResult);
+                return email;
+              });
+
+              // consolidate Emails with duplicate email addresses, combining messages into same arrays.
+              const uniqueEmailAddresses = new Set();
+              const uniqueEmails: Email[] = [];
+              for(const ununiqueEmail of ununiqueEmails) {
+                if(uniqueEmailAddresses.has(ununiqueEmail.emailAddress)) {
+                  const foundEmail = uniqueEmails.find(email => email.emailAddress === ununiqueEmail.emailAddress)!;
+                  foundEmail.messages = foundEmail.messages.concat(ununiqueEmail.messages);
+                }
+                else {
+                  uniqueEmails.push(ununiqueEmail);
+                  uniqueEmailAddresses.add(ununiqueEmail.emailAddress);
+                }
               }
-              return false;
-            })
-              .map((email: Email) => ({ 
-                ...email, 
-                searchString: email.searchString = (email.name + ' ' + email.emailAddress + ' ' + (email.school ?? '')).toLowerCase(),
-              }));
 
-            const potentialMessages = potentialPass.messages.map((d: MinimalMessage) => messages[d.id]);
-            const potentialEmails = potentialMessages.map((message: any) => {
-              const email: Email = convertEmail(message.payload.headers.find((d: Header) => d.name === 'From').value);
-              email.message = message;
-              return email;
-            });
-            const potentialEmailsSeenSoFar = new Set();
-            const uniquePotentialEmails = [];
-            for(const potentialEmail of potentialEmails) {
-              if(potentialEmailsSeenSoFar.has(potentialEmail.emailAddress)) continue;
-              uniquePotentialEmails.push(potentialEmail);
-              potentialEmailsSeenSoFar.add(potentialEmail.emailAddress);
-            }
-            const filteredUnknownEmails: Email[] = [];
-            const filteredPotentialEmails = uniquePotentialEmails.filter((email: Email) => {
-              const result = collegeURLs.find((collegeURL: CollegeURL) => new RegExp(`[@\.]${collegeURL.url}$`).test(email.emailAddress));
-              if(typeof result === 'undefined') {
-                filteredUnknownEmails.push(email);
-                return false;
+              // add school name if it can be found from collegeURLs requested from server.
+              for(const email of uniqueEmails) {
+                const result = collegeURLs.find((collegeURL: CollegeURL) => new RegExp(`[@\.]${collegeURL.url}$`).test(email.emailAddress));
+                if(typeof result !== 'undefined') {
+                  email.school = result.name;
+                }
               }
-              email.school = result.name;
-              return true;
+              const individualEmails: Email[] = uniqueEmails
+                .map((email: Email) => ({ 
+                  ...email, 
+                  searchString: (email.name + ' ' + email.emailAddress + ' ' + (email.school ?? '')).toLowerCase(),
+                }));
+
+              // consolidate those with identical school names
+              const uniqueEmailGroups: { [key: string]: EmailGroup } = {};
+              for(const email of individualEmails) {
+                const key = email.school ?? email.name;
+                if(uniqueEmailGroups[key] === undefined) {
+                  uniqueEmailGroups[key] = {
+                    school: key,
+                    searchString: email.searchString,
+                    emails: [email]
+                  }
+                }
+                else {
+                  uniqueEmailGroups[key].searchString = uniqueEmailGroups[key].searchString += ' ' + email.searchString;
+                  uniqueEmailGroups[key].emails.push(email);
+                }
+              }
+
+              // sort email groups by school, and sort each email group's emails alphabetically as well
+              const sortedEmailGroups = Object.values(uniqueEmailGroups).sort((a, b) => a.school < b.school ? -1 : 1);
+              for(const emailGroup of sortedEmailGroups) {
+                emailGroup.emails.sort((a, b) => (a.name === '' ? a.school : a.name) < (b.name === '' ? b.school : b.name) ? -1 : 1)
+              }
+
+              setBlockedEmailGroups(sortedEmailGroups);
+              setIsLoading(false);
             });
-
-            const combinedFilteredPotentialEmails = filteredPotentialEmails.concat(filteredUnknownEmails)
-              .map((email: Email) => ({ 
-                ...email, 
-                searchString: email.searchString = (email.name + ' ' + email.emailAddress + ' ' + (email.school ?? '')).toLowerCase(),
-              }));
-
-            filteredKnownEmails.sort((a, b) => (a.school ?? a.name) < (b.school ?? b.name) ? -1 : 1);
-            combinedFilteredPotentialEmails.sort((a, b) => (a.school ?? a.name) < (b.school ?? b.name) ? -1 : 1);
-
-            setBlockedEmails(filteredKnownEmails);
-            setPotentialEmails(combinedFilteredPotentialEmails);
-            setIsLoading(false);
-          });
         });
     }
   }, [step]);
@@ -254,11 +232,10 @@ function Setup(props: {}) {
           messageListVisibility: 'hide'
         }
       })
-        .then(labelResult => {
+        .then(async labelResult => {
           setExtraMessage('Setting filters...');
 
           const { result: { id: labelID } } = labelResult;
-          const allFilterCreationRequests: gapi.client.Request<any>[] = [];
           const actions = {
             addLabelIds: [
               labelID!,
@@ -271,12 +248,18 @@ function Setup(props: {}) {
 
           // create groups of email addresses in different filters, add calls to create filter to batch.
           const emailAddressGroups: string[][] = [[]];
+          let blockedEmails: Email[] = [];
+          for(const emailGroup of blockedEmailGroups) {
+            blockedEmails = blockedEmails.concat(emailGroup.emails);
+          }
           for(const email of blockedEmails) {
             if(emailAddressGroups[emailAddressGroups.length-1].length >= 30) emailAddressGroups.push([]);
             emailAddressGroups[emailAddressGroups.length-1].push(email.emailAddress);
           }
+          
+          // execute filter creations one by one to prevent dropped filter creations
           for(const emailAddressGroup of emailAddressGroups) {
-            allFilterCreationRequests.push(gapi.client.gmail.users.settings.filters.create({
+            await gapi.client.gmail.users.settings.filters.create({
               userId: 'me',
               resource: {
                 criteria: {
@@ -284,92 +267,80 @@ function Setup(props: {}) {
                 },
                 action: actions
               }
-            }));
-          }
-
-          // put requests into batches of 25, then execute
-          const allFilterCreationBatches: gapi.client.Batch<any>[] = [gapi.client.newBatch()];
-          let numAdded = 0;
-          for(const filterCreationRequest of allFilterCreationRequests) {
-            if(numAdded === 25) { // fewer in batch because of potentially long filter messages 
-              allFilterCreationBatches.push(gapi.client.newBatch());
-              numAdded = 0;
-            }
-            allFilterCreationBatches[allFilterCreationBatches.length-1].add(filterCreationRequest);
-            ++numAdded;
-          }
-
-          Promise.all(allFilterCreationBatches)
-            .then(async res => {
-              setExtraMessage('Looking for old emails to filter...');
-
-              // generate array of queries to look for emails based on block list based on emailAddressGroups
-              let queries = emailAddressGroups.map(emailAddressGroup => `after: 1970/01/01 from:{${emailAddressGroup.join(' ')}}`)
-              let ids: string[] = [];
-              let nextPageTokens: { [key: string]: string} = {};
-              while(true) {
-                const batch = gapi.client.newBatch();
-                queries.forEach((query, i) => {
-                  batch.add(gapi.client.gmail.users.messages.list({
-                    userId: 'me',
-                    q: query,
-                    maxResults: 500,
-                    pageToken: nextPageTokens[`${i}`]
-                  }), { id: `${i}`, callback: () => {} });
-                });
-                const { result: batchResult } = await batch; // run batch
-
-                // run through each query, remove via returning false in filter if we've exhausted everything and add next page token to array for next pass
-                let doBreak = true;
-                queries = queries.filter((_, i) => {
-                  if(batchResult[`${i}`].result.resultSizeEstimate === 0) return false;
-                  ids = ids.concat(batchResult[`${i}`].result.messages.map((result: MinimalMessage) => result.id));
-                  if(batchResult[`${i}`].result.nextPageToken !== undefined) {
-                    nextPageTokens[`${i}`] = batchResult[`${i}`].result.nextPageToken;
-                    doBreak = false;
-                    return true;
-                  }
-                  else {
-                    delete nextPageTokens[`${i}`];
-                    return false;
-                  }
-                });
-
-                if(doBreak) break;
-              }
-
-              gapi.client.gmail.users.messages.batchModify({
-                userId: 'me',
-                resource: {
-                  ...actions,
-                  ids: ids,
-                }
-              })
-                .then(() => {
-                  setExtraMessage('');
-                  setNumMessagesModified(ids.length);
-                  setIsLoading(false);
-                });
             });
+          }
+
+          setExtraMessage('Looking for old emails to filter...');
+
+          // generate array of queries to look for emails based on block list based on emailAddressGroups
+          let queries = emailAddressGroups.map(emailAddressGroup => `after: 1970/01/01 from:{${emailAddressGroup.join(' ')}}`)
+          let ids: string[] = [];
+          let nextPageTokens: { [key: string]: string} = {};
+          while(true) {
+            const batch = gapi.client.newBatch();
+            queries.forEach((query, i) => {
+              batch.add(gapi.client.gmail.users.messages.list({
+                userId: 'me',
+                q: query,
+                maxResults: 500,
+                includeSpamTrash: true,
+                pageToken: nextPageTokens[`${i}`]
+              }), { id: `${i}`, callback: () => {} });
+            });
+            const { result: batchResult } = await batch; // run batch
+
+            // run through each query, remove via returning false in filter if we've exhausted everything and add next page token to array for next pass
+            let doBreak = true;
+            queries = queries.filter((_, i) => {
+              if(batchResult[`${i}`].result.resultSizeEstimate === 0) return false;
+              ids = ids.concat(batchResult[`${i}`].result.messages.map((result: MinimalMessage) => result.id));
+              if(batchResult[`${i}`].result.nextPageToken !== undefined) {
+                nextPageTokens[`${i}`] = batchResult[`${i}`].result.nextPageToken;
+                doBreak = false;
+                return true;
+              }
+              else {
+                delete nextPageTokens[`${i}`];
+                return false;
+              }
+            });
+
+            if(doBreak) break;
+          }
+
+          // split ids into multiple 1000-id arrays (max ids for batchModify)
+          const idBatches: string[][] = [[]];
+          for(const id of ids) {
+            if(idBatches[idBatches.length-1].length === 1000) {
+              idBatches.push([]);
+            }
+            idBatches[idBatches.length-1].push(id);
+          }
+          for(const idBatch of idBatches) {
+            await gapi.client.gmail.users.messages.batchModify({
+              userId: 'me',
+              resource: {
+                ...actions,
+                ids: idBatch,
+              }
+            });
+          }
+
+          setExtraMessage('');
+          setNumMessagesModified(ids.length);
+          setIsLoading(false);
         });
     }
   }, [step]);
 
 
   // filter blocked emails for search results
-  const blockedEmailsDisplay: Email[] = useMemo<Email[]>(() => {
-    if(blockedEmailsSearch === '') return blockedEmails;
-    return blockedEmails.filter(email => {
-      return email.searchString?.includes(blockedEmailsSearch);
+  const blockedEmailsDisplay: EmailGroup[] = useMemo<EmailGroup[]>(() => {
+    if(blockedEmailGroupsSearch === '') return blockedEmailGroups;
+    return blockedEmailGroups.filter(emailGroup => {
+      return emailGroup.searchString?.includes(blockedEmailGroupsSearch);
     });
-  }, [blockedEmailsSearch, blockedEmails]);
-
-  const potentialEmailsDisplay: Email[] = useMemo<Email[]>(() => {
-    if(potentialEmailsSearch === '') return potentialEmails;
-    return potentialEmails.filter(email => {
-      return email.searchString?.includes(potentialEmailsSearch);
-    });
-  }, [potentialEmailsSearch, potentialEmails]);
+  }, [blockedEmailGroupsSearch, blockedEmailGroups]);
 
 
   return <main>
@@ -379,18 +350,18 @@ function Setup(props: {}) {
       </Modal.Header>
       <Modal.Body>
         <p>
-          Note that only the email addresses listed under "Blocked Schools" will be filtered. Addresses that are part of the whitelist or are listed as
-          "Potential Sources of Spam" will be completely unaffected.
+          Make sure that you're not blocking any colleges you want to hear from!
         </p>
         <p>
-          Once the filters are set up, they can still be removed if you want to undo your actions.
+          If you later find out that you want to change your filters, don't worry. You can undo all of College Spam Guard's
+          actions at any time.
         </p>
       </Modal.Body>
       <Modal.Footer>
         <Button variant='secondary' onClick={() => setShowFilterConfirmation(false)}>
           Keep editing
         </Button>
-        <Button variant='primary' onClick={() => {
+        <Button variant='primary' className='ms-4' onClick={() => {
           setStep(3);
           setShowFilterConfirmation(false);
         }}>
@@ -400,15 +371,15 @@ function Setup(props: {}) {
     </Modal>
     <div className='bg-secondary text-dark'>
       <Container fluid='sm' className='bg-secondary text-dark py-2' style={{ fontSize: '1.25rem' }}>
-        <div className='d-flex justify-content-center align-content-center' style={{ gap: '1.5rem' }}>
+        <div className='d-flex justify-content-center align-content-center steps-container'>
           <div>
             <span className={`d-inline-block text-center me-3 border border-2 border-dark rounded-circle ${step >= 1 ? 'bg-dark text-secondary' : 'text-dark'}`} style={{ width: '1.875rem', height: '1.875rem', lineHeight: 'calc(1.875rem - 4px)' }}>
               1
             </span>
-            Choose spam filter method
+            Pick filter method
           </div>
           <div className='d-flex flex-column justify-content-center'>
-            <div className='border-top border-2 border-dark' style={{ width: '3rem', height: '2px' }} />
+            <div className='border-top border-2 border-dark steps-dash' style={{ height: '2px' }} />
           </div>
           <div>
             <span className={`d-inline-block text-center me-3 border border-2 border-dark rounded-circle ${step >= 2 ? 'bg-dark text-secondary' : 'text-dark'}`} style={{ width: '1.875rem', height: '1.875rem', lineHeight: 'calc(1.875rem - 4px)' }}>
@@ -417,7 +388,7 @@ function Setup(props: {}) {
             Configure whitelist
           </div>
           <div className='d-flex flex-column justify-content-center'>
-            <div className='border-top border-2 border-dark' style={{ width: '3rem', height: '2px' }} />
+            <div className='border-top border-2 border-dark steps-dash' style={{ height: '2px' }} />
           </div>
           <div>
             <span className={`d-inline-block text-center me-3 border border-2 border-dark rounded-circle ${step >= 3 ? 'bg-dark text-secondary' : 'text-dark'}`} style={{ width: '1.875rem', height: '1.875rem', lineHeight: 'calc(1.875rem - 4px)' }}>
@@ -441,7 +412,7 @@ function Setup(props: {}) {
       ? <Container fluid='sm'>
         <h2 className='py-5 text-center'>Choose spam filter method</h2>
         <p className='pd-5 text-center'>The chosen method will be applied to any messages received in the future, and also applied retroactively to messages already received.</p>
-        <CardGroup className='m-auto'>
+        <CardGroup className='m-auto mb-5'>
           <Card className='card-hover-expand' style={{ cursor: 'pointer' }} onClick={() => {setStep(2); setFilterMethod('read');}}>
             <Card.Body>
               <Card.Text className='text-center'>
@@ -482,26 +453,72 @@ function Setup(props: {}) {
       </Container>
       : step === 2
       ? <Container fluid='sm'>
-        <div className='d-flex py-5'>
+        <div className='d-flex my-5 configure-container'>
           <div style={{ flex: 1}} />
-          <h2>Choose spam filter method</h2>
-          <div className='text-end' style={{ flex: 1 }}>
+          <h2>Configure your filter list</h2>
+          <div style={{ flex: 1 }}>
             <Button size='lg' onClick={() => setShowFilterConfirmation(true)}>
               Finalize filters
             </Button>
           </div>
         </div>
+        <h2 className='my-5'>Make <u>sure</u> to whitelist schools you are <b>applying</b> to, were <b>accepted</b> to, or are <b>attending</b>!</h2>
         <h3>Whitelist</h3>
         <Card body className='setup-whitelist-container'>
-          <Row className='row-cols-4 gy-4 gx-3'>
+          <Row className='email-container gy-4 gx-3'>
             {
-              whitelistedEmails.length === 0
+              whitelistedEmailGroups.length === 0
               ? <Col className='w-100'>
                 Click the icon to keep hearing from a college. Any whitelisted college will appear here.
               </Col>
-              : whitelistedEmails.map(email => <EmailInfo key={email.emailAddress} email={email} variant='block' onIconClick={() => {
-                setWhitelistedEmails(whiteListedEmailsState => whiteListedEmailsState.filter(d => d !== email));
-                setBlockedEmails(knownEmailsState => [...knownEmailsState, email]);
+              : whitelistedEmailGroups.map(emailGroup => <EmailInfo key={emailGroup.school} emailGroup={emailGroup} variant='block' onIconClick={(email?: Email) => {
+                // undefined email indicates that we're blocking the whole email group.
+                // undefined email may still only correspond to a single email that must be added to an existing blacklisted email group
+                if(email === undefined) {
+                  setWhitelistedEmailGroups(whitelistedEmailGroupsState => whitelistedEmailGroupsState.filter(d => d !== emailGroup));
+                  setBlockedEmailGroups(blockedEmailGroupsState => {
+                    const sameSchoolEmailGroupIndex = blockedEmailGroupsState.findIndex(d => d.school === emailGroup.school);
+                    if(sameSchoolEmailGroupIndex !== -1) {
+                      return [...blockedEmailGroupsState.slice(0, sameSchoolEmailGroupIndex), {
+                        school: emailGroup.school,
+                        emails: [...blockedEmailGroupsState[sameSchoolEmailGroupIndex].emails, ...emailGroup.emails],
+                        searchString: blockedEmailGroupsState[sameSchoolEmailGroupIndex].searchString + ' ' + emailGroup.searchString
+                      }, ...blockedEmailGroupsState.slice(sameSchoolEmailGroupIndex+1)];
+                    }
+                    else {
+                      return [...blockedEmailGroupsState, {
+                        school: emailGroup.school,
+                        searchString: emailGroup.searchString,
+                        emails: [...emailGroup.emails]
+                      }];
+                    }
+                  });
+                }
+                else {
+                  setWhitelistedEmailGroups(whitelistedEmailGroupsState => {
+                    emailGroup.emails = emailGroup.emails.filter(d => d !== email);
+                    emailGroup.searchString = emailGroup.emails.map(d => d.searchString).join(' ');
+                    return [...whitelistedEmailGroupsState];
+                  });
+                  setBlockedEmailGroups(blockedEmailGroupsState => {
+                    const sameSchoolEmailGroupIndex = blockedEmailGroupsState.findIndex(d => d.school === emailGroup.school);
+                    if(sameSchoolEmailGroupIndex !== -1) {
+                      return [...blockedEmailGroupsState.slice(0, sameSchoolEmailGroupIndex), {
+                        school: emailGroup.school,
+                        emails: [...blockedEmailGroupsState[sameSchoolEmailGroupIndex].emails, email],
+                        searchString: blockedEmailGroupsState[sameSchoolEmailGroupIndex].searchString + ' ' + email.searchString
+                      }, ...blockedEmailGroupsState.slice(sameSchoolEmailGroupIndex+1)];
+                    }
+                    else {
+                      return [...blockedEmailGroupsState, {
+                        school: emailGroup.school,
+                        searchString: email.searchString,
+                        emails: [email]
+                      }];
+                    }
+                  });
+                }
+                
               }} />)
             }
           </Row>
@@ -512,14 +529,14 @@ function Setup(props: {}) {
           <Form.Label column className='w-auto' style={{ flex: '0 0 auto' }}>
             Search:
           </Form.Label>
-          <Col sm={4}>
-            <Form.Control placeholder='Type the name of a school....' value={blockedEmailsSearch} onChange={e => setBlockedEmailsSearch(e.target.value)} />
+          <Col sm={4} style={{ minWidth: 'min(100%, 300px)' }}>
+            <Form.Control placeholder='Type the name of a school....' value={blockedEmailGroupsSearch} onChange={e => setBlockedEmailGroupsSearch(e.target.value)} />
           </Col>
         </Form.Group>
-        <Card body className='setup-blocked-container'>
-          <Row className='row-cols-4 gy-4 gx-3'>
+        <Card body className='setup-blocked-container mb-5'>
+          <Row className='email-container gy-4 gx-3'>
             {
-              blockedEmails.length === 0
+              blockedEmailGroups.length === 0
               ? <Col className='w-100'>
                 No spam sources blocked.
               </Col>
@@ -527,39 +544,56 @@ function Setup(props: {}) {
               ? <Col className='w-100'>
                 No results for the given search terms.
               </Col>
-              : blockedEmailsDisplay.map(email => <EmailInfo key={email.emailAddress} email={email} variant='whitelist' onIconClick={() => {
-                setBlockedEmails(knownEmailsState => knownEmailsState.filter(d => d !== email));
-                setWhitelistedEmails(whiteListedEmailsState => [...whiteListedEmailsState, email]);
+              : blockedEmailsDisplay.map(emailGroup => <EmailInfo key={emailGroup.school} emailGroup={emailGroup} variant='whitelist' onIconClick={(email?: Email) => {
+                // undefined email indicates that we're adding the whole email group.
+                // undefined email may still only correspond to a single email that must be added to an existing whitelisted email group
+                if(email === undefined) {
+                  setBlockedEmailGroups(blockedEmailGroupsState => blockedEmailGroupsState.filter(d => d !== emailGroup));
+                  setWhitelistedEmailGroups(whitelistedEmailGroupsState => {
+                    const sameSchoolEmailGroupIndex = whitelistedEmailGroupsState.findIndex(d => d.school === emailGroup.school);
+                    if(sameSchoolEmailGroupIndex !== -1) {
+                      return [...whitelistedEmailGroupsState.slice(0, sameSchoolEmailGroupIndex), {
+                        school: emailGroup.school,
+                        emails: [...whitelistedEmailGroupsState[sameSchoolEmailGroupIndex].emails, ...emailGroup.emails],
+                        searchString: whitelistedEmailGroupsState[sameSchoolEmailGroupIndex].searchString + ' ' + emailGroup.searchString
+                      }, ...whitelistedEmailGroupsState.slice(sameSchoolEmailGroupIndex+1)];
+                    }
+                    else {
+                      return [...whitelistedEmailGroupsState, {
+                        school: emailGroup.school,
+                        searchString: emailGroup.searchString,
+                        emails: [...emailGroup.emails]
+                      }];
+                    }
+                  });
+                }
+                else {
+                  setBlockedEmailGroups(blockedEmailGroupsState => {
+                    emailGroup.emails = emailGroup.emails.filter(d => d !== email);
+                    emailGroup.searchString = emailGroup.emails.map(d => d.searchString).join(' ');
+                    return [...blockedEmailGroupsState];
+                  });
+                  setWhitelistedEmailGroups(whitelistedEmailGroupsState => {
+                    const sameSchoolEmailGroupIndex = whitelistedEmailGroupsState.findIndex(d => d.school === emailGroup.school);
+                    if(sameSchoolEmailGroupIndex !== -1) {
+                      return [...whitelistedEmailGroupsState.slice(0, sameSchoolEmailGroupIndex), {
+                        school: emailGroup.school,
+                        emails: [...whitelistedEmailGroupsState[sameSchoolEmailGroupIndex].emails, email],
+                        searchString: whitelistedEmailGroupsState[sameSchoolEmailGroupIndex].searchString + ' ' + email.searchString
+                      }, ...whitelistedEmailGroupsState.slice(sameSchoolEmailGroupIndex+1)];
+                    }
+                    else {
+                      return [...whitelistedEmailGroupsState, {
+                        school: emailGroup.school,
+                        searchString: email.searchString,
+                        emails: [email]
+                      }];
+                    }
+                  });
+                }
+                
               }} />)
             }  
-          </Row>
-        </Card>
-        <h3 className='mt-5'>Potential Spam Addresses</h3>
-        <p>These addresses WON'T be blocked unless manually added to the filter list.</p>
-        <Form.Group as={Row} className='mb-3'>
-          <Form.Label column className='w-auto' style={{ flex: '0 0 auto' }}>
-            Search:
-          </Form.Label>
-          <Col sm={4}>
-            <Form.Control placeholder='Type the name of a school....' value={potentialEmailsSearch} onChange={e => setPotentialEmailsSearch(e.target.value)} />
-          </Col>
-        </Form.Group>
-        <Card body className='setup-potential-container'>
-          <Row className='row-cols-4 gy-4 gx-3'>
-            {
-              potentialEmails.length === 0
-              ? <Col className='w-100'>
-                No potential spam sources listed.
-              </Col>
-              : potentialEmailsDisplay.length === 0
-              ? <Col className='w-100'>
-                No results for the given search terms.
-              </Col>
-              : potentialEmailsDisplay.map(email => <EmailInfo key={email.emailAddress} email={email} variant='block' onIconClick={() => {
-                setPotentialEmails(potentialEmailsState => potentialEmailsState.filter(d => d !== email));
-                setBlockedEmails(knownEmailsState => [...knownEmailsState, email]);
-              }} />)
-            }
           </Row>
         </Card>
       </Container>
@@ -570,27 +604,20 @@ function Setup(props: {}) {
           Or, <Link to='/manage'>manage your filters</Link>.
         </h5>
         <p className='my-4 text-center' style={{ fontSize: '1.25rem' }}>Spam is being <span className='p-2 bg-secondary rounded'>{filterMethod === 'read' ? 'marked as read' : filterMethod === 'archive' ? 'archived' : 'trashed'}</span></p>
-        <p className='my-4 text-center' style={{ fontSize: '1.25rem' }}><span className='p-2 bg-secondary rounded'>{blockedEmails.length}</span> email address blocked</p>
+        <p className='my-4 text-center' style={{ fontSize: '1.25rem' }}><span className='p-2 bg-secondary rounded'>{blockedEmailGroups.length}</span> email address blocked</p>
         <p className='my-4 text-center' style={{ fontSize: '1.25rem' }}><span className='p-2 bg-secondary rounded'>{numMessagesModified}</span> messages retroactively modified</p>
         <h3 className='mt-5'>The following schools are whitelisted:</h3>
-        <Card body className='setup-whitelist-container'>
-          <Row className='row-cols-4 gy-4 gx-3'>
+        <Card body className='setup-whitelist-container mb-5'>
+          <Row className='email-container gy-4 gx-3'>
             {
-              whitelistedEmails.length === 0
+              whitelistedEmailGroups.length === 0
               ? <Col className='w-100'>
                 No emails whitelisted
               </Col>
-              : whitelistedEmails.map(email => <EmailInfo key={email.emailAddress} email={email} variant='block' button={false} />)
+              : whitelistedEmailGroups.map(emailGroup => <EmailInfo key={emailGroup.school} emailGroup={emailGroup} variant='block' button={false} />)
             }
           </Row>
         </Card>
-      </Container>
-    }
-    {
-      step === 2 && <Container fluid='sm' style={{ height: '5rem' }}>
-        <Button className='position-absolute' variant='outline-dark' style={{ bottom: '1rem' }} onClick={() => setStep(step-1)}>
-          Go back
-        </Button>
       </Container>
     }
   </main>

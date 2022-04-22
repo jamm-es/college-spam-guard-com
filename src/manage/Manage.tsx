@@ -1,3 +1,5 @@
+import { faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useState } from 'react';
 import { Button, Container, Modal } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +10,8 @@ function Manage(props: {}) {
 
   const [CSGLabel, setCSGLabel] = useState<gapi.client.gmail.Label>();
   const [showRemoveConfirmation, setShowRemoveConfirmation] = useState<boolean>(false);
+  const [showRemoveSpinner, setShowRemoveSpinner] = useState<boolean>(false);
+  const [blockedEmails, setBlockedEmails] = useState<string[]>([]);
 
   const navigate = useNavigate();
   
@@ -50,14 +54,13 @@ function Manage(props: {}) {
                   userId: 'me',
                 })
                   .then(({ result: { filter: filters } }) => {
-                    const filterIds = filters?.filter(filter => filter.action?.addLabelIds?.includes(CSGLabel?.id!)).map(filter => filter.id!)!;
-                    const filterBatch = gapi.client.newBatch();
-                    for(const filterId of filterIds) {
-                      filterBatch.add(gapi.client.gmail.users.settings.filters.delete({
-                        userId: 'me',
-                        id: filterId
-                      }));
+                    const CSGFilters = filters?.filter(filter => filter.action?.addLabelIds?.includes(foundLabel?.id!))!;
+                    let emails: string[] = [];
+                    for(const CSGFilter of CSGFilters) {
+                      const fromCriteria = CSGFilter.criteria?.from!;
+                      emails = emails.concat(fromCriteria.substring(1, fromCriteria.length-1).split(' '));
                     }
+                    setBlockedEmails(emails);
                   });
               }
             });
@@ -91,37 +94,52 @@ function Manage(props: {}) {
         }
       }
 
-      // remove labels
-      gapi.client.gmail.users.labels.delete({
-        userId: 'me',
-        id: CSGLabel?.id!
-      })
-        .then(() => {
-          // figure out what modification we made
-          const modification = CSGLabel?.name?.match(/\(([a-z]+)\)/)![1];
-
-          // restore the modified messages
-          gapi.client.gmail.users.messages.batchModify({
-            userId: 'me',
-            resource: {
-              ids: ids,
-              addLabelIds: [modification === 'read' ? 'UNREAD' : 'INBOX'],
-              removeLabelIds: [CSGLabel?.id!, ...(modification === 'trash' ? ['TRASH'] : [])]
-            }
+      // remove label and navigate away
+      const removeLabelAndEnd = () => {
+        gapi.client.gmail.users.labels.delete({
+          userId: 'me',
+          id: CSGLabel?.id!
+        })
+          .then(() => {
+            navigate('/');
+            return;
           })
-            .then(() => {
-              // navigate to homepage
-              navigate('/');
-              return;
-            })
-            .catch(() => {
-              // batchModify errors if ids is empty. navigate away anyways.
-              navigate('/');
-              return;
-            })
-        });
-    }
+          .catch(() => {
+            // sometimes 404s
+            navigate('/');
+            return;
+          })
+      }
 
+      // figure out what modification we made
+      const modification = CSGLabel?.name?.match(/\(([a-z]+)\)/)![1];
+
+      // split ids into groups of 1000, then wait for them all to execute
+      const idGroups: string[][] = [[]];
+      for(const id of ids) {
+        if(idGroups[idGroups.length-1].length === 1000) idGroups.push([]);
+        idGroups[idGroups.length-1].push(id);
+      }
+      const batchModifications: gapi.client.Request<any>[] = [];
+      for(const idGroup of idGroups) {
+        batchModifications.push(gapi.client.gmail.users.messages.batchModify({
+          userId: 'me',
+          resource: {
+            ids: idGroup,
+            addLabelIds: [modification === 'read' ? 'UNREAD' : 'INBOX'],
+            removeLabelIds: [CSGLabel?.id!, ...(modification === 'trash' ? ['TRASH'] : [])]
+          }
+        }));
+      }
+      Promise.all(batchModifications)
+        .then(() => {
+          removeLabelAndEnd();
+        })
+        .catch(() => {
+          // batchModify errors if ids is empty
+          removeLabelAndEnd();
+        })
+    }
 
     // remove filters
     gapi.client.gmail.users.settings.filters.list({
@@ -162,9 +180,10 @@ function Manage(props: {}) {
           Go back
         </Button>
         <Button variant='danger' onClick={() => {
-          setShowRemoveConfirmation(false);
+          setShowRemoveSpinner(true);
+          removeFromAccount();
         }}>
-          Remove permanently
+          Remove permanently {showRemoveSpinner && <FontAwesomeIcon icon={faSpinner} pulse />}
         </Button>
       </Modal.Footer>
     </Modal>
@@ -185,8 +204,10 @@ function Manage(props: {}) {
           Completely remove College Spam Guard
         </Button>
       </div>
-      
-      <h5></h5>
+      <h5 className='text-start mt-5'>Blocked emails</h5>
+      <ul className='text-start'>
+        {blockedEmails.map(email => <li key={email}>{email}</li>)}
+      </ul>
     </Container>
   </main>
 }

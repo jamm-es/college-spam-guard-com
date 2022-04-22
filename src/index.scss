@@ -31,6 +31,7 @@ $enable-negative-margins: true;
 .card-hover-expand:hover {
   transform: scale(1.1);
   z-index: 10;
+  border-left: rgba(0, 0, 0, 0.125) 1px solid !important;
 }
 
 .setup-whitelist-container {
@@ -47,4 +48,73 @@ $enable-negative-margins: true;
 
 .btn-primary {
   color: $light !important;
+}
+
+.email-container > * {
+  flex: 0 0 auto;
+  width: 25%;
+}
+
+.steps-container {
+  gap: 1.5rem;
+}
+
+.steps-dash {
+  width: 3rem;
+}
+
+.configure-container:last-child {
+  text-align: end;
+}
+
+@media(max-width: 1025px) {
+  .steps-dash {
+    width: 1.5rem;
+  }
+}
+
+@media(max-width: 991px) {
+  .email-container > * {
+    width: 33.33333%;
+  }
+  
+}
+
+@media(max-width: 800px) {
+  .steps-dash {
+    display: none;
+  }
+  
+  .steps-container {
+    gap: 1rem;
+  }
+}
+
+@media(max-width: 767px) {
+  .email-container > * {
+    width: 50%;
+  }
+  
+  .steps-container {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .configure-container {
+    flex-direction: column;
+  }
+
+  .configure-container > * {
+    text-align: center;
+  }
+
+  .configure-container > h2 {
+    margin-bottom: 1rem;
+  }
+}
+
+@media(max-width: 500px) {
+  .email-container > * {
+    width: 100%;
+  }
 }
