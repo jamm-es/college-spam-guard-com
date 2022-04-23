@@ -7,6 +7,7 @@ import { Home } from './pages';
 import { Setup } from './setup';
 import { Manage } from './manage';
 import { SignIn } from './signin';
+import { Admin } from './admin';
 
 import './index.scss';
 
@@ -24,6 +25,7 @@ ReactDOM.render(
             <Route path='/signin' element={<SignIn />}/>
             <Route path='/setup' element={<Setup />} />
             <Route path='/manage' element={<Manage />} />
+            <Route path='/admin' element={<Admin />} />
           </Routes>
         </div>
         <Footer />

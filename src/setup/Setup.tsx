@@ -177,10 +177,15 @@ function Setup(props: {}) {
               }
 
               // add school name if it can be found from collegeURLs requested from server.
+              // also create a set of unknown urls to report to the server
+              const unknownSchools = new Set<string>();
               for(const email of uniqueEmails) {
                 const result = collegeURLs.find((collegeURL: CollegeURL) => new RegExp(`[@\.]${collegeURL.url}$`).test(email.emailAddress));
                 if(typeof result !== 'undefined') {
                   email.school = result.name;
+                }
+                else {
+                  unknownSchools.add(email.emailAddress.split('@')[1]);
                 }
               }
               const individualEmails: Email[] = uniqueEmails
@@ -188,6 +193,19 @@ function Setup(props: {}) {
                   ...email, 
                   searchString: (email.name + ' ' + email.emailAddress + ' ' + (email.school ?? '')).toLowerCase(),
                 }));
+
+              // perform post request for each unknown school
+              for(const unknownSchool of unknownSchools) {
+                try {
+                  await axios.post(new URL('unknown-school', api.url).href, {
+                    url: unknownSchool
+                  });
+                }
+                catch {
+                  // this doesn't really matter - if we get an error, fail silently and stop trying to send requests
+                  break;
+                }
+              }
 
               // consolidate those with identical school names
               const uniqueEmailGroups: { [key: string]: EmailGroup } = {};

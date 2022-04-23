@@ -63,7 +63,7 @@ $enable-negative-margins: true;
   width: 3rem;
 }
 
-.configure-container:last-child {
+.configure-container :last-child {
   text-align: end;
 }
 
