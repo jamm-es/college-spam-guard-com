@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import { Header, Footer, NotFound } from './standard';
-import { Home } from './pages';
+import { Home, PrivacyPolicy } from './pages';
 import { Setup } from './setup';
 import { Manage } from './manage';
 import { SignIn } from './signin';
@@ -22,6 +22,7 @@ ReactDOM.render(
         <div className='position-relative' style={{ flex: 1 }}>
           <Routes>
             <Route path='/' element={<Home />} />
+            <Route path='/privacy-policy' element={<PrivacyPolicy />} />
             <Route path='/signin' element={<SignIn />}/>
             <Route path='/setup' element={<Setup />} />
             <Route path='/manage' element={<Manage />} />
