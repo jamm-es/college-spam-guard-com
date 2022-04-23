@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { Alert, Button, Container } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 
-import credentials from '../credentials.json';
-
 function SignIn(props: {}) {
 
   const [basicProfile, setBasicProfile] = useState<gapi.auth2.BasicProfile | undefined>(undefined);
@@ -18,8 +16,8 @@ function SignIn(props: {}) {
   useEffect(() => {
     gapi.load('client:auth2', () => {
       gapi.client.init({
-        apiKey: credentials.apiKey,
-        clientId: credentials.clientId,
+        apiKey: process.env.REACT_APP_GOOGLE_API_KEY,
+        clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'],
         scope: 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic'
       })

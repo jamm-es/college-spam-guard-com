@@ -16,7 +16,7 @@ function Home(props: {}) {
       </Container>
     </div>
     <Container fluid='sm' className='py-5 text-start' style={{ maxWidth: '700px' }}>
-      <p className='text-dark'>
+      <p>
         For students with gmail accounts, College Spam Guard will scan your last 500 college spam messages for 
         email addresses to block, then apply any action you specify to remove spam currently in your inbox and prevent
         spam from accumulating in the future.

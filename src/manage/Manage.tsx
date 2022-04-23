@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import { Button, Container, Modal } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
-import credentials from '../credentials.json';
-
 function Manage(props: {}) {
 
   const [CSGLabel, setCSGLabel] = useState<gapi.client.gmail.Label>();
@@ -20,8 +18,8 @@ function Manage(props: {}) {
   useEffect(() => {
     gapi.load('client:auth2', () => {
       gapi.client.init({
-        apiKey: credentials.apiKey,
-        clientId: credentials.clientId,
+        apiKey: process.env.REACT_APP_GOOGLE_API_KEY,
+        clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'],
         scope: 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic'
       })
@@ -193,18 +191,18 @@ function Manage(props: {}) {
         Your email account, <u>{gapi.auth2 !== undefined && gapi.auth2.getAuthInstance().currentUser.get().getBasicProfile().getEmail()}</u>,
         has already been modified by College Spam Guard.
       </p>
-      <div>
-        <Button className='me-4' variant='secondary' onClick={() => {
-          gapi.auth2.getAuthInstance().disconnect();
-          navigate('/signin');
+      <div className='mb-5 mt-n3'>
+        <Button className='me-4 mt-3' variant='secondary' onClick={() => {
+          gapi.auth2.getAuthInstance().signOut();
+          navigate('/');
         }}>
           Log out
         </Button>
-        <Button variant='danger' onClick={() => setShowRemoveConfirmation(true)}>
+        <Button className='mt-3' variant='danger' onClick={() => setShowRemoveConfirmation(true)}>
           Completely remove College Spam Guard
         </Button>
       </div>
-      <h5 className='text-start mt-5'>Blocked emails</h5>
+      <h5 className='text-start'>Blocked emails</h5>
       <ul className='text-start'>
         {blockedEmails.map(email => <li key={email}>{email}</li>)}
       </ul>

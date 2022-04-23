@@ -1,0 +1,5 @@
+The following environmental variables must be specified while building:
+
+REACT_APP_API_URL
+REACT_APP_GOOGLE_API_KEY
+REACT_APP_GOOGLE_CLIENT_ID

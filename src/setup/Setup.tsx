@@ -8,8 +8,6 @@ import axios from "axios";
 import LoadingText from "./LoadingText";
 import Email from './Email';
 import EmailGroup from './EmailGroup';
-import credentials from '../credentials.json';
-import api from '../api.json';
 import EmailInfo from "./EmailInfo";
 
 function Setup(props: {}) {
@@ -37,8 +35,8 @@ function Setup(props: {}) {
   useEffect(() => {
     gapi.load('client:auth2', () => {
       gapi.client.init({
-        apiKey: credentials.apiKey,
-        clientId: credentials.clientId,
+        apiKey: process.env.REACT_APP_GOOGLE_API_KEY,
+        clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'],
         scope: 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic'
       })
@@ -73,7 +71,7 @@ function Setup(props: {}) {
       setIsLoading(true);
 
       // get list of colleges with urls and names from CSG server
-      axios.get(new URL('college-urls', api.url).href)
+      axios.get(new URL('college-urls', process.env.REACT_APP_API_URL).href)
         .then(({ data: collegeURLs }) => {
           type CollegeURL = {
             url: string,
@@ -197,7 +195,7 @@ function Setup(props: {}) {
               // perform post request for each unknown school
               for(const unknownSchool of unknownSchools) {
                 try {
-                  await axios.post(new URL('unknown-school', api.url).href, {
+                  await axios.post(new URL('unknown-school', process.env.REACT_APP_API_URL).href, {
                     url: unknownSchool
                   });
                 }
@@ -223,6 +221,7 @@ function Setup(props: {}) {
                   uniqueEmailGroups[key].emails.push(email);
                 }
               }
+              console.log(uniqueEmailGroups);
 
               // sort email groups by school, and sort each email group's emails alphabetically as well
               const sortedEmailGroups = Object.values(uniqueEmailGroups).sort((a, b) => a.school < b.school ? -1 : 1);

@@ -3,8 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Container, Form } from 'react-bootstrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import api from '../api.json'
-
 function Admin(props: {}) {
 
   const [password, setPassword] = useState<string>('');
@@ -31,7 +29,7 @@ function Admin(props: {}) {
     setPassword(password);
 
     // do API request - if 401, navigate away
-    axios.get(new URL('admin', api.url).href, {
+    axios.get(new URL('admin', process.env.REACT_APP_API_URL).href, {
       headers: {
         'Authorization': `Basic ${password}`
       }
@@ -39,11 +37,11 @@ function Admin(props: {}) {
       .then(res => {
         setUnknownSchools(res.data.sort((a: any, b: any) => a.count > b.count ? -1 : 1));
 
-        axios.get(new URL('college-urls', api.url).href)
+        axios.get(new URL('college-urls', process.env.REACT_APP_API_URL).href)
           .then(res => {
             setCollegeURLs(res.data);
 
-            axios.get(new URL('whitelisted-emails', api.url).href)
+            axios.get(new URL('whitelisted-emails', process.env.REACT_APP_API_URL).href)
               .then(res => {
                 setWhitelistedEmails(res.data);
               });
@@ -69,7 +67,7 @@ function Admin(props: {}) {
     if(whitelistedEmailRegex.current !== null && whitelistedEmailRegex.current.value !== '') {
       payload.regex = whitelistedEmailRegex.current.value;
     }
-    axios.post(new URL('whitelisted-emails', api.url).href, payload, {
+    axios.post(new URL('whitelisted-emails', process.env.REACT_APP_API_URL).href, payload, {
       headers: {
         'Authorization': `Basic ${password}`
       }
@@ -103,7 +101,7 @@ function Admin(props: {}) {
     payload.url = collegeURLURL.current.value;
     payload.isEdu = collegeURLURL.current.value.endsWith('.edu');
     payload.name = collegeURLName.current.value;
-    axios.post(new URL('college-urls', api.url).href, payload, {
+    axios.post(new URL('college-urls', process.env.REACT_APP_API_URL).href, payload, {
       headers: {
         'Authorization': `Basic ${password}`
       }

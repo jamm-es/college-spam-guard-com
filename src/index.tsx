@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
-import { Header, Footer } from './standard';
+import { Header, Footer, NotFound } from './standard';
 import { Home } from './pages';
 import { Setup } from './setup';
 import { Manage } from './manage';
@@ -26,6 +26,7 @@ ReactDOM.render(
             <Route path='/setup' element={<Setup />} />
             <Route path='/manage' element={<Manage />} />
             <Route path='/admin' element={<Admin />} />
+            <Route path='*' element={<NotFound />} />
           </Routes>
         </div>
         <Footer />
