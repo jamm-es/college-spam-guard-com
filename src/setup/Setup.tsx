@@ -433,7 +433,7 @@ function Setup(props: {}) {
           <Card className='card-hover-expand' style={{ cursor: 'pointer' }} onClick={() => {setStep(2); setFilterMethod('read');}}>
             <Card.Body>
               <Card.Text className='text-center'>
-                <span className='twa twa-see-no-evil-monkey twa-5x' />
+                <span className='twa twa-rolled-up-newspaper twa-5x' />
               </Card.Text>
               <Card.Title>Mark Spam as Read</Card.Title>
               <Card.Text>
@@ -445,7 +445,7 @@ function Setup(props: {}) {
           <Card className='card-hover-expand' style={{ cursor: 'pointer' }} onClick={() => {setStep(2); setFilterMethod('archive');}}>
             <Card.Body>
               <Card.Text className='text-center'>
-                <span className='twa twa-bullseye twa-5x' />
+                <span className='twa twa-file-cabinet twa-5x' />
               </Card.Text>
               <Card.Title>Archive Spam</Card.Title>
               <Card.Text>
@@ -457,7 +457,7 @@ function Setup(props: {}) {
           <Card className='card-hover-expand' style={{ cursor: 'pointer' }} onClick={() => {setStep(2); setFilterMethod('trash');}}>
             <Card.Body>
               <Card.Text className='text-center'>
-                <span className='twa twa-no-entry twa-5x' />
+                <span className='twa twa-wastebasket twa-5x' />
               </Card.Text>
               <Card.Title>Trash Spam</Card.Title>
               <Card.Text>
