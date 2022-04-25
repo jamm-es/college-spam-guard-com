@@ -71,14 +71,23 @@ function Setup(props: {}) {
     if(step === 2 && !isLoading) {
       setIsLoading(true);
 
-      // get list of colleges with urls and names from CSG server
-      axios.get(new URL('college-urls', process.env.REACT_APP_API_URL).href)
-        .then(({ data: collegeURLs }) => {
-          type CollegeURL = {
+      // get list of colleges with urls and names from CSG server. Also get whitelist.
+      Promise.all([
+        axios.get(new URL('college-urls', process.env.REACT_APP_API_URL).href),
+        axios.get(new URL('whitelisted-emails', process.env.REACT_APP_API_URL).href)
+      ])
+        .then(([{ data: collegeURLs }, { data: whitelistedURLs }]) => {
+          interface CollegeURL {
             url: string,
             isEdu: boolean,
             name: string
           };
+
+          interface WhitelistedEmails {
+            domain?: string,
+            fullEmail?: string,
+            regex?: string
+          }
 
           // creates search term for all edu domains, plus any non-edu's from our college list
           const collegeURLSearchTerm = `from:{*@*.edu ${collegeURLs.filter((d: CollegeURL) => !d.isEdu).map((d: CollegeURL) => `*@${d.url}`).join(' ')}}`;
@@ -170,6 +179,20 @@ function Setup(props: {}) {
                   foundEmail.messages = foundEmail.messages.concat(ununiqueEmail.messages);
                 }
                 else {
+                  // check if email is covered by whitelist
+                  let removeEmail = false;
+                  for(const whitelistedURL of whitelistedURLs as WhitelistedEmails[]) {
+                    if(
+                      whitelistedURL.domain !== undefined && ununiqueEmail.emailAddress.endsWith(whitelistedURL.domain)
+                      || whitelistedURL.fullEmail !== undefined && ununiqueEmail.emailAddress === whitelistedURL.fullEmail
+                      || whitelistedURL.regex !== undefined && new RegExp(whitelistedURL.regex).test(ununiqueEmail.emailAddress)
+                    ) {
+                      removeEmail = true;
+                      break;
+                    }
+                  }
+                  if(removeEmail) continue;
+
                   uniqueEmails.push(ununiqueEmail);
                   uniqueEmailAddresses.add(ununiqueEmail.emailAddress);
                 }
