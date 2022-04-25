@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Helmet from 'react-helmet';
 
 import { Header, Footer, NotFound } from './standard';
 import { Home, PrivacyPolicy } from './pages';
@@ -14,6 +15,7 @@ import './index.scss';
 ReactDOM.render(
   <React.StrictMode>
     <BrowserRouter>
+    <Helmet titleTemplate='%s | College Spam Guard' />
       <div className='d-flex flex-column min-vh-100'>
         <Routes>
           <Route path='/' />

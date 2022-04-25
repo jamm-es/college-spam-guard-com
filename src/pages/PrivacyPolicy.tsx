@@ -1,7 +1,11 @@
 import { Container } from "react-bootstrap";
+import { Helmet } from 'react-helmet';
 
 function PrivacyPolicy(props: {}) {
   return <main>
+    <Helmet>
+      <title>Privacy Policy</title>
+    </Helmet>
     <h2 className='mt-4 text-center'>
       Privacy Policy
     </h2>

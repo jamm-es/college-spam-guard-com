@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { Helmet } from "react-helmet";
 
 import LoadingText from "./LoadingText";
 import Email from './Email';
@@ -361,6 +362,9 @@ function Setup(props: {}) {
 
 
   return <main>
+    <Helmet>
+      <title>Setup</title>
+    </Helmet>
     <Modal show={showFilterConfirmation} onHide={() => setShowFilterConfirmation(false)}>
       <Modal.Header closeButton>
         <Modal.Title>Confirm filters</Modal.Title>

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Container, Form } from 'react-bootstrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 
 function Admin(props: {}) {
 
@@ -122,6 +123,9 @@ function Admin(props: {}) {
 
 
   return <main id='top'>
+    <Helmet>
+      <title>Admin</title>
+    </Helmet>
     <div className='position-fixed end-0 top-50 w-50 bg-dark text-light'>
       <code>
       <u><a href='#top' className='text-light'>go to top</a></u>

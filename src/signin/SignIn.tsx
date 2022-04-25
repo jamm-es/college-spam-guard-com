@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useState } from "react";
 import { Alert, Button, Container } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
+import { Helmet } from 'react-helmet';
 
 function SignIn(props: {}) {
 
@@ -74,6 +75,9 @@ function SignIn(props: {}) {
 
 
   return <main>
+    <Helmet>
+      <title>Sign In</title>
+    </Helmet>
     <Container fluid='sm' className='text-center mt-3'>
       {
         basicProfile !== undefined && !hasPerms && <Alert variant='danger' className='text-start' dismissible>

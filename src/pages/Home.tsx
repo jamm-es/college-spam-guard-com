@@ -1,8 +1,12 @@
 import { Button, Container } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 
 function Home(props: {}) {
   return <main className='text-center'>
+    <Helmet>
+      <title>Home</title>
+    </Helmet>
     <div className='bg-primary'>
       <Container fluid='sm' className='py-5 text-light'>
         <h1 className='mb-4'>

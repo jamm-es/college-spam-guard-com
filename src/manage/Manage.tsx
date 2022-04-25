@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useState } from 'react';
 import { Button, Container, Modal } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 
 function Manage(props: {}) {
 
@@ -159,6 +160,9 @@ function Manage(props: {}) {
 
   
   return <main>
+    <Helmet>
+      <title>Manage Email</title>
+    </Helmet>
     <Modal show={showRemoveConfirmation} onHide={() => setShowRemoveConfirmation(false)}>
       <Modal.Header closeButton>
         <Modal.Title>Confirm removal</Modal.Title>
